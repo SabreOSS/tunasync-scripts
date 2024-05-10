@@ -1,7 +1,9 @@
 # tunasync-scripts
 Custom scripts for mirror jobs
 
-# LICENCE
+Check [README.sabre](README.sabre.md) for custom build details.
+
+### LICENCE
 
 ```
 This program is free software: you can redistribute it and/or modify    
