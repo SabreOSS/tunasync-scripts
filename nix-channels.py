@@ -30,7 +30,8 @@ if len(sys.argv) > 1 and sys.argv[1] == '--ustc':
 else:
     UPSTREAM_URL = os.getenv("TUNASYNC_UPSTREAM_URL", 'https://nixos.org/channels')
     MIRROR_BASE_URL = os.getenv("MIRROR_BASE_URL", 'https://mirrors.tuna.tsinghua.edu.cn/nix-channels')
-    WORKING_DIR = os.getenv("TUNASYNC_WORKING_DIR", 'working-channels')
+    WORKING_DIR = os.getenv("TUNASYNC_WORKING_DIR", '/home/sabre/tmp/mirror-test/test-01')
+    CHANNEL_MATCH_SUBSTRING = os.getenv("TUNASYNC_CHANNEL_MATCH_SUBSTRING", 'nixos-23.11-small')
 
 PATH_BATCH = int(os.getenv('NIX_MIRROR_PATH_BATCH', 8192))
 THREADS = int(os.getenv('NIX_MIRROR_THREADS', 10))
@@ -141,11 +142,17 @@ credentials = Credentials(provider=Static())
 client = minio.Minio('s3.amazonaws.com', credentials=credentials)
 
 def get_channels():
-    return [
+    all_channels = [
         (x.object_name, x.last_modified)
         for x in client.list_objects_v2('nix-channels')
         if re.fullmatch(r'(nixos|nixpkgs)-.+[^/]', x.object_name)
     ]
+    selected_channels = []
+    for i, element in enumerate(all_channels):
+        if CHANNEL_MATCH_SUBSTRING in element[0]:
+            selected_channels.append(element)
+
+    return selected_channels
 
 def clone_channels():
     logging.info(f'- Fetching channels')
