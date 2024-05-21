@@ -40,6 +40,7 @@ RETAIN_DAYS = float(os.getenv('NIX_MIRROR_RETAIN_DAYS', 30))
 
 STORE_DIR = 'store'
 RELEASES_DIR = 'releases'
+STATS_DIR = 'stats'
 
 # Channels that have not updated since migration to Netlify [1] are assumed to
 # be too old and defunct.
@@ -55,6 +56,7 @@ working_dir = Path(WORKING_DIR)
 os.environ['XDG_CACHE_HOME'] = str((working_dir / '.cache').resolve())
 
 nix_store_dest = f'file://{(working_dir / STORE_DIR).resolve()}'
+nix_stats_dest = f'file://{(working_dir / STATS_DIR).resolve()}'
 
 binary_cache_url = f'{MIRROR_BASE_URL}/{STORE_DIR}'
 
@@ -339,6 +341,16 @@ def update_channels(channels):
                         todo.append(one_todo)
         else:
             logging.info(f'    - {len(todo)} paths to download')
+
+            stats_path = f'{working_dir}/{STATS_DIR}/{CHANNEL_MATCH_SUBSTRING}'
+            stats_path.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+            cnt_file_name = timestamp + '.cnt'
+            list_file_name = timestamp + '.list'
+            with (stats_path / cnt_file_name).open('w') as cnt_file:
+                cnt_file.write("Sync files count: " + str(len(todo)))
+            with (stats_path / list_file_name).open('w') as list_file:
+                f.write(list_file)
 
             digits = len(str(len(todo)))
 
