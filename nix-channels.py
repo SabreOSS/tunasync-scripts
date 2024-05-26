@@ -333,10 +333,10 @@ def update_channels(channels):
             else:
                 infos = json.loads(process.stdout)
                 for info in infos:
-                    ha = hash_part(info)
+                    ha = hash_part(info['path'])
                     one_todo = [
                         name
-                        for name in [infos[info]['url'], f'{ha}.narinfo']
+                        for name in [info['url'], f'{ha}.narinfo']
                         if name not in seen_paths
                     ]
                     seen_paths.update(one_todo)
