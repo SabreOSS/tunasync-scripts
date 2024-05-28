@@ -37,9 +37,12 @@ PATH_BATCH = int(os.getenv('NIX_MIRROR_PATH_BATCH', 8192))
 THREADS = int(os.getenv('NIX_MIRROR_THREADS', 10))
 DELETE_OLD = os.getenv('NIX_MIRROR_DELETE_OLD', '1') == '1'
 RETAIN_DAYS = float(os.getenv('NIX_MIRROR_RETAIN_DAYS', 30))
+SAVE_STATS = os.getenv('NIX_MIRROR_SAVE_STATS', '1') == '1'
+COLLECT_GARBAGE = os.getenv('NIX_MIRROR_COLLECT_GARBAGE', '0') == '1'
 
 STORE_DIR = 'store'
 RELEASES_DIR = 'releases'
+STATS_DIR = 'stats'
 
 # Channels that have not updated since migration to Netlify [1] are assumed to
 # be too old and defunct.
@@ -47,7 +50,6 @@ RELEASES_DIR = 'releases'
 # [1]: https://discourse.nixos.org/t/announcement-moving-nixos-org-to-netlify/6212
 CLONE_SINCE = datetime(2020, 3, 6, tzinfo=pytz.utc)
 TIMEOUT = 60
-
 working_dir = Path(WORKING_DIR)
 
 # `nix copy` uses a cache database
@@ -55,6 +57,9 @@ working_dir = Path(WORKING_DIR)
 os.environ['XDG_CACHE_HOME'] = str((working_dir / '.cache').resolve())
 
 nix_store_dest = f'file://{(working_dir / STORE_DIR).resolve()}'
+nix_stats_dest = f'file://{(working_dir / STATS_DIR).resolve()}'
+stats_path = Path(f'{working_dir}/{STATS_DIR}/{CHANNEL_MATCH_SUBSTRING}')
+stats_timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
 
 binary_cache_url = f'{MIRROR_BASE_URL}/{STORE_DIR}'
 
@@ -340,6 +345,16 @@ def update_channels(channels):
         else:
             logging.info(f'    - {len(todo)} paths to download')
 
+            if SAVE_STATS:
+                stats_path.mkdir(parents=True, exist_ok=True)
+                cnt_file_name = stats_timestamp + '.sync.cnt'
+                list_file_name = stats_timestamp + '.sync.list'
+                with (stats_path / cnt_file_name).open('w') as cnt_file:
+                    cnt_file.write("Sync files count: " + str(len(todo)))
+                with (stats_path / list_file_name).open('w') as list_file:
+                    for line in todo:
+                        list_file.write(f"{line}\n")
+
             digits = len(str(len(todo)))
 
             def try_mirror(index, paths):
@@ -437,6 +452,15 @@ def garbage_collect():
 
     logging.info(f'  - {len(closure)} paths in closure')
 
+    if SAVE_STATS:
+        closure_cnt_file_name = stats_timestamp + '.closure.cnt'
+        closure_list_file_name = stats_timestamp + '.closure.list'
+        with (stats_path / closure_cnt_file_name).open('w') as cnt_file:
+            cnt_file.write("Sync files count: " + str(len(closure)))
+        with (stats_path / closure_list_file_name).open('w') as list_file:
+            for line in closure:
+                list_file.write(f"{line}\n")
+
     deleted = 0
 
     for path in (working_dir / STORE_DIR).iterdir():
@@ -468,6 +492,7 @@ def garbage_collect():
 if __name__ == '__main__':
     channels = clone_channels()
     update_channels(channels)
-    garbage_collect()
+    if COLLECT_GARBAGE:
+        garbage_collect()
     if failure:
         sys.exit(1)
