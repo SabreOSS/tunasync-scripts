@@ -39,6 +39,8 @@ DELETE_OLD = os.getenv('NIX_MIRROR_DELETE_OLD', '1') == '1'
 RETAIN_DAYS = float(os.getenv('NIX_MIRROR_RETAIN_DAYS', 30))
 SAVE_STATS = os.getenv('NIX_MIRROR_SAVE_STATS', '1') == '1'
 COLLECT_GARBAGE = os.getenv('NIX_MIRROR_COLLECT_GARBAGE', '0') == '1'
+SET_CACHE_PRIORITY = os.getenv('NIX_MIRROR_SET_CACHE_PRIORITY', '1') == '1'
+CACHE_PRIORITY = os.getenv('NIX_MIRROR_CACHE_PRIORITY', 10)
 
 STORE_DIR = 'store'
 RELEASES_DIR = 'releases'
@@ -291,10 +293,20 @@ def update_channels(channels):
         if not has_cache_info:
             info_file = 'nix-cache-info'
             logging.info(f'    - Downloading {info_file}')
+            info_file_path = working_dir / STORE_DIR / info_file
             download(
                 f'{upstream_binary_cache}/{info_file}',
-                working_dir / STORE_DIR / info_file
+                info_file_path
             )
+
+            # set cache priority to control binary caches order
+            if SET_CACHE_PRIORITY:
+                with open(info_file_path, 'r') as cache_info_file:
+                    cache_info_data = cache_info_file.read()
+                cache_info_data = cache_info_data.replace('Priority: 40', 'Priority: ' + str(CACHE_PRIORITY))
+                with open(info_file_path, 'w') as cache_info_file:
+                    cache_info_file.write(cache_info_data)
+
             has_cache_info = True
 
         with lzma.open(str(chan_path_update / 'store-paths.xz')) as f:
