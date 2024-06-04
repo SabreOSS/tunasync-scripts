@@ -31,7 +31,6 @@ else:
     UPSTREAM_URL = os.getenv("TUNASYNC_UPSTREAM_URL", 'https://nixos.org/channels')
     MIRROR_BASE_URL = os.getenv("MIRROR_BASE_URL", 'https://mirrors.tuna.tsinghua.edu.cn/nix-channels')
     WORKING_DIR = os.getenv("TUNASYNC_WORKING_DIR", '/home/sabre/tmp/mirror-test/test-01')
-    CHANNEL_MATCH_SUBSTRING = os.getenv("TUNASYNC_CHANNEL_MATCH_SUBSTRING", 'nixos-23.11-small')
 
 PATH_BATCH = int(os.getenv('NIX_MIRROR_PATH_BATCH', 8192))
 THREADS = int(os.getenv('NIX_MIRROR_THREADS', 10))
@@ -41,6 +40,8 @@ SAVE_STATS = os.getenv('NIX_MIRROR_SAVE_STATS', '1') == '1'
 COLLECT_GARBAGE = os.getenv('NIX_MIRROR_COLLECT_GARBAGE', '0') == '1'
 SET_CACHE_PRIORITY = os.getenv('NIX_MIRROR_SET_CACHE_PRIORITY', '1') == '1'
 CACHE_PRIORITY = os.getenv('NIX_MIRROR_CACHE_PRIORITY', 10)
+CHANNEL_MATCH_SUBSTRING = os.getenv("NIX_MIRROR_CHANNEL_MATCH_SUBSTRING", 'nixos-23.11-small')
+CHANNELS_LIST = os.getenv("NIX_MIRROR_CHANNELS_LIST", 'nixos-23.11-small,nixos-24.05-small')
 
 STORE_DIR = 'store'
 RELEASES_DIR = 'releases'
@@ -60,7 +61,7 @@ os.environ['XDG_CACHE_HOME'] = str((working_dir / '.cache').resolve())
 
 nix_store_dest = f'file://{(working_dir / STORE_DIR).resolve()}'
 nix_stats_dest = f'file://{(working_dir / STATS_DIR).resolve()}'
-stats_path = Path(f'{working_dir}/{STATS_DIR}/{CHANNEL_MATCH_SUBSTRING}')
+stats_path = Path(f'{working_dir}/{STATS_DIR}')
 stats_timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
 
 binary_cache_url = f'{MIRROR_BASE_URL}/{STORE_DIR}'
@@ -149,17 +150,23 @@ credentials = Credentials(provider=Static())
 client = minio.Minio('s3.amazonaws.com', credentials=credentials)
 
 def get_channels():
+    channels_specified = CHANNELS_LIST.split(",")
+    channels_substring = CHANNEL_MATCH_SUBSTRING
+
     all_channels = [
         (x.object_name, x.last_modified)
         for x in client.list_objects_v2('nix-channels')
         if re.fullmatch(r'(nixos|nixpkgs)-.+[^/]', x.object_name)
     ]
-    selected_channels = []
+    matched_channels = []
     for i, element in enumerate(all_channels):
-        if CHANNEL_MATCH_SUBSTRING in element[0]:
-            selected_channels.append(element)
+        if element[0] in channels_specified:
+            matched_channels.append(element)
+        elif channels_substring and channels_substring in element[0]:
+            matched_channels.append(element)
 
-    return selected_channels
+    logging.info(f'- Starting synchronization for channels: ' + ', '.join(m[0] for m in matched_channels))
+    return matched_channels
 
 def clone_channels():
     logging.info(f'- Fetching channels')
@@ -359,8 +366,8 @@ def update_channels(channels):
 
             if SAVE_STATS:
                 stats_path.mkdir(parents=True, exist_ok=True)
-                cnt_file_name = stats_timestamp + '.sync.cnt'
-                list_file_name = stats_timestamp + '.sync.list'
+                cnt_file_name = channel + '.' + stats_timestamp + '.sync.cnt'
+                list_file_name = channel + '.' + stats_timestamp + '.sync.list'
                 with (stats_path / cnt_file_name).open('w') as cnt_file:
                     cnt_file.write("Sync files count: " + str(len(todo)))
                 with (stats_path / list_file_name).open('w') as list_file:
