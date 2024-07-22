@@ -168,6 +168,7 @@ def get_channels():
     logging.info(f'- Starting synchronization for channels: ' + ', '.join(m[0] for m in matched_channels))
     return matched_channels
 
+
 def clone_channels():
     logging.info(f'- Fetching channels')
 
@@ -275,10 +276,13 @@ def clone_channels():
 
             logging.info(f'    - Symlink updated')
 
+    logging.info("Cloning channels succeeded!")
     return channels_to_update
+
 
 def hash_part(path):
     return path.split('/')[-1].split('-', 1)[0]
+
 
 def update_channels(channels):
     logging.info(f'- Updating binary cache')
@@ -404,12 +408,16 @@ def update_channels(channels):
             chan_path_update.rename(chan_path)
             logging.info(f'    - Finished with success, symlink updated')
 
+    logging.info("Updating channels succeeded!")
+
+
 def parse_narinfo(narinfo):
     res = {}
     for line in narinfo.splitlines():
         key, value = line.split(': ', 1)
         res[key] = value
     return res
+
 
 def garbage_collect():
     logging.info(f'- Collecting garbage')
@@ -508,10 +516,19 @@ def garbage_collect():
     else:
         logging.info(f'  - {deleted} paths now unreachable')
 
+
 if __name__ == '__main__':
-    channels = clone_channels()
-    update_channels(channels)
+    try:
+        channels = clone_channels()
+        update_channels(channels)
+        logging.info('Process completed successfully!')
+    except Exception as e:
+        logging.error(f'Process failed with: {e}')
+        logging.exception(e)
+        failure = True
+
     if COLLECT_GARBAGE:
         garbage_collect()
+
     if failure:
         sys.exit(1)
